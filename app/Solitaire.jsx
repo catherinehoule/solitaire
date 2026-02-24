@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 // --- Constants ---
 const SUITS = ["♠", "♥", "♦", "♣"];
@@ -63,8 +63,7 @@ function foundationIndexForCard(card, foundations) {
 
 function autoMoveCard(state, cardId, fromZone, fromIndex) {
   const { tableau, waste, foundations } = state;
-
-  let card, newState;
+  let card;
 
   if (fromZone === "waste") {
     card = waste[waste.length - 1];
@@ -73,11 +72,9 @@ function autoMoveCard(state, cardId, fromZone, fromIndex) {
     const col = tableau[fromIndex];
     const cardIdx = col.findIndex(c => c.id === cardId);
     if (cardIdx === -1) return null;
-    // Only allow moving a single face-up card or a stack
     if (!col[cardIdx].faceUp) return null;
     card = col[cardIdx];
     const stack = col.slice(cardIdx);
-    // Multi-card moves can only go to tableau
     if (stack.length > 1) {
       for (let t = 0; t < 7; t++) {
         if (t === fromIndex) continue;
@@ -98,7 +95,7 @@ function autoMoveCard(state, cardId, fromZone, fromIndex) {
     return null;
   }
 
-  // Try foundation first (single card)
+  // Try foundation first
   const fi = foundationIndexForCard(card, foundations);
   if (fi !== -1) {
     const newFoundations = foundations.map(f => [...f]);
@@ -145,7 +142,6 @@ function autoMoveCard(state, cardId, fromZone, fromIndex) {
 
 function findHint(state) {
   const { tableau, waste, foundations } = state;
-  // Check waste top
   if (waste.length > 0) {
     const card = waste[waste.length - 1];
     if (foundationIndexForCard(card, foundations) !== -1) return `Jouer ${card.rank}${card.suit} sur la fondation`;
@@ -153,7 +149,6 @@ function findHint(state) {
       if (canPlaceOnTableau(card, tableau[t])) return `Jouer ${card.rank}${card.suit} sur la colonne ${t + 1}`;
     }
   }
-  // Check tableau
   for (let col = 0; col < 7; col++) {
     const column = tableau[col];
     for (let row = 0; row < column.length; row++) {
@@ -240,15 +235,82 @@ function QuebecBack({ w, h }) {
   );
 }
 
+// --- Flying card animation overlay ---
+function FlyingCard({ card, fromRect, toRect, onDone, delay = 0 }) {
+  const ref = useRef(null);
+  const isRed = SUIT_COLORS[card.suit] === "red";
+  const color = isRed ? "#c0392b" : "#1a1a2e";
+  const w = toRect.width;
+  const h = toRect.height;
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const dx = fromRect.left - toRect.left;
+    const dy = fromRect.top - toRect.top;
+    ref.current.style.transition = "none";
+    ref.current.style.transform = `translate(${dx}px, ${dy}px)`;
+    ref.current.style.opacity = delay > 0 ? "0" : "1";
+    ref.current.getBoundingClientRect();
+    const start = () => {
+      if (!ref.current) return;
+      ref.current.style.opacity = "1";
+      ref.current.style.transition = "transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)";
+      ref.current.style.transform = "translate(0, 0)";
+    };
+    const startTimer = delay > 0 ? setTimeout(start, delay) : (start(), null);
+    const doneTimer = setTimeout(onDone, 320 + delay);
+    return () => { clearTimeout(startTimer); clearTimeout(doneTimer); };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "fixed",
+        left: toRect.left,
+        top: toRect.top,
+        width: w,
+        height: h,
+        zIndex: 999,
+        pointerEvents: "none",
+        borderRadius: 5,
+        background: "#faf7f2",
+        border: "1.5px solid #d4c9b8",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "3px 4px",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Top-left: rank */}
+      <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <span style={{ fontWeight: 800, fontSize: w < 50 ? 17 : 21, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
+        <span style={{ fontSize: w < 50 ? 13 : 16, color, lineHeight: 1.2 }}>{card.suit}</span>
+      </div>
+      {/* Center suit - lower */}
+      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: w < 50 ? 44 : 60, color, lineHeight: 1, pointerEvents: "none" }}>
+        {card.suit}
+      </div>
+      <div />
+    </div>
+  );
+}
+
 // --- Card Component ---
-function Card({ card, onClick, small, stacked, dimmed }) {
+function Card({ card, onClick, small, cardRef }) {
   const isRed = SUIT_COLORS[card.suit] === "red";
   const w = small ? 44 : 56;
   const h = small ? 62 : 80;
+  const color = isRed ? "#c0392b" : "#1a1a2e";
+  const cornerFontSize = small ? 17 : 21;
+  const centerFontSize = small ? 44 : 60;
 
   if (!card.faceUp) {
     return (
       <div
+        ref={cardRef}
         onClick={onClick}
         style={{
           width: w, height: h,
@@ -266,31 +328,35 @@ function Card({ card, onClick, small, stacked, dimmed }) {
 
   return (
     <div
+      ref={cardRef}
       onClick={onClick}
       style={{
         width: w, height: h,
         borderRadius: 5,
-        background: dimmed ? "#e8e0d4" : "#faf7f2",
-        border: `1.5px solid ${dimmed ? "#c8bfb0" : "#d4c9b8"}`,
+        background: "#faf7f2",
+        border: "1.5px solid #d4c9b8",
         cursor: onClick ? "pointer" : "default",
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "space-between",
+        padding: "3px 4px",
         boxShadow: onClick ? "0 2px 6px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.2)",
-        transition: "transform 0.1s, box-shadow 0.1s",
         userSelect: "none",
         position: "relative",
-        gap: 1,
+        overflow: "hidden",
       }}
     >
-      <div style={{ fontWeight: 800, lineHeight: 1, color: isRed ? "#c0392b" : "#1a1a2e", fontFamily: "'Georgia', serif", textAlign: "center", fontSize: small ? 22 : 30 }}>
-        {card.rank}
+      {/* Top row: rank left, suit right */}
+      <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <span style={{ fontWeight: 800, fontSize: cornerFontSize, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
+        <span style={{ fontSize: cornerFontSize - 4, color, lineHeight: 1.2 }}>{card.suit}</span>
       </div>
-      <div style={{ lineHeight: 1, color: isRed ? "#c0392b" : "#1a1a2e", textAlign: "center", fontSize: small ? 20 : 26 }}>
+      {/* Center suit - shifted lower */}
+      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: centerFontSize, color, lineHeight: 1, pointerEvents: "none" }}>
         {card.suit}
       </div>
+      <div />
     </div>
   );
 }
@@ -315,54 +381,185 @@ function EmptySlot({ label, onClick }) {
   );
 }
 
+// --- Waste Fan: show top 3 cards fanned ---
+function WasteFan({ waste, onTopClick, setCardRef, flyingCardIds }) {
+  const w = 56, h = 80;
+  const visCount = Math.min(3, waste.length);
+  if (visCount === 0) return <EmptySlot label="" />;
+
+  // Cards shown: index [waste.length - visCount .. waste.length-1]
+  // last card is on top (rightmost)
+  const fanOffset = 18; // px between fanned cards
+  const totalWidth = w + (visCount - 1) * fanOffset;
+
+  return (
+    <div style={{ position: "relative", width: totalWidth, height: h, flexShrink: 0 }}>
+      {Array.from({ length: visCount }).map((_, i) => {
+        const cardIdx = waste.length - visCount + i;
+        const card = waste[cardIdx];
+        const isTop = i === visCount - 1;
+        const left = i * fanOffset;
+        return (
+          <div
+            key={card.id}
+            style={{
+              position: "absolute",
+              left,
+              top: 0,
+              zIndex: i,
+            }}
+          >
+            <div
+              ref={isTop ? (el => setCardRef && setCardRef(card.id, el)) : undefined}
+              style={{ opacity: (isTop && flyingCardIds && flyingCardIds.includes(card.id)) ? 0 : 1 }}
+            >
+              <Card
+                card={card}
+                small={false}
+                onClick={isTop ? () => onTopClick(card.id) : undefined}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // --- Main App ---
 export default function Solitaire() {
   const [state, setState] = useState(() => dealGame());
+  const [history, setHistory] = useState([]);
   const [hint, setHint] = useState(null);
   const [won, setWon] = useState(false);
   const [message, setMessage] = useState(null);
+  const [flyAnims, setFlyAnims] = useState([]); // array of { card, fromRect, toRect, delay }
+  const msgTimerRef = useRef(null);
+  // Refs map: cardId -> DOM element
+  const cardRefs = useRef({});
+  const setCardRef = (id, el) => { if (el) cardRefs.current[id] = el; else delete cardRefs.current[id]; };
 
   const showMessage = (msg, duration = 2000) => {
+    if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
     setMessage(msg);
-    setTimeout(() => setMessage(null), duration);
+    msgTimerRef.current = setTimeout(() => setMessage(null), duration);
+  };
+
+  const pushHistory = (prevState) => {
+    setHistory(h => [...h.slice(-30), prevState]);
   };
 
   const newGame = () => {
     setState(dealGame());
+    setHistory([]);
     setHint(null);
     setWon(false);
     setMessage(null);
   };
 
+  const handleUndo = () => {
+    if (history.length === 0) {
+      showMessage("Rien à annuler");
+      return;
+    }
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setState(prev);
+    setWon(false);
+    setHint(null);
+  };
+
+  // Draw 3 from stock
   const handleStock = () => {
     setState(prev => {
       if (prev.stock.length === 0) {
         if (prev.waste.length === 0) return prev;
+        pushHistory(prev);
         const newStock = [...prev.waste].reverse().map(c => ({ ...c, faceUp: false }));
         return { ...prev, stock: newStock, waste: [] };
       }
-      const card = { ...prev.stock[prev.stock.length - 1], faceUp: true };
+      pushHistory(prev);
+      const drawCount = Math.min(3, prev.stock.length);
+      const drawn = prev.stock.slice(prev.stock.length - drawCount).map(c => ({ ...c, faceUp: true }));
       return {
         ...prev,
-        stock: prev.stock.slice(0, -1),
-        waste: [...prev.waste, card],
+        stock: prev.stock.slice(0, prev.stock.length - drawCount),
+        waste: [...prev.waste, ...drawn],
       };
     });
     setHint(null);
   };
 
   const handleCardClick = useCallback((cardId, zone, index) => {
+    // Collect the full stack being moved and capture all source rects before state change
+    const stackIds = [];
+    const currentState = (() => {
+      // We read state via a ref trick — just read from current setState closure
+      return null; // will be handled inside setState
+    })();
+
     setState(prev => {
-      const result = autoMoveCard(prev, cardId, zone, index);
-      if (result) {
-        if (isWon(result.foundations)) {
-          setWon(true);
+      // Figure out the stack of cards being moved
+      let stack = [cardId];
+      if (zone === "tableau") {
+        const col = prev.tableau[index];
+        const cardIdx = col.findIndex(c => c.id === cardId);
+        if (cardIdx !== -1) {
+          stack = col.slice(cardIdx).map(c => c.id);
         }
+      }
+
+      // Capture source rects for all cards in stack
+      const fromRects = stack.map(id => {
+        const el = cardRefs.current[id];
+        return el ? el.getBoundingClientRect() : null;
+      });
+
+      const result = autoMoveCard(prev, cardId, zone, index);
+      if (!result) {
+        showMessage("Déplacement impossible");
+        return prev;
+      }
+
+      const pendingWon = isWon(result.foundations);
+
+      if (!fromRects[0]) {
+        pushHistory(prev);
+        if (pendingWon) setWon(true);
         setHint(null);
         return result;
       }
-      showMessage("Déplacement impossible");
-      return prev;
+
+      // After React renders result, measure destination rects and launch all fly anims
+      setTimeout(() => {
+        const anims = [];
+        stack.forEach((id, i) => {
+          const toEl = cardRefs.current[id];
+          const toRect = toEl ? toEl.getBoundingClientRect() : null;
+          const fromRect = fromRects[i];
+          if (!toRect || !fromRect) return;
+          // Find the card object in result
+          const allCards = [
+            ...result.foundations.flat(),
+            ...result.tableau.flat(),
+            ...result.waste,
+          ];
+          const movedCard = allCards.find(c => c.id === id);
+          if (movedCard) {
+            anims.push({ card: movedCard, fromRect, toRect, delay: i * 30 });
+          }
+        });
+        if (anims.length > 0) {
+          setFlyAnims(anims.map((a, i) => ({
+            ...a,
+            pendingWon: i === anims.length - 1 ? pendingWon : false,
+          })));
+        }
+      }, 0);
+
+      pushHistory(prev);
+      setHint(null);
+      return { ...result, flyingCardIds: stack };
     });
   }, []);
 
@@ -388,7 +585,7 @@ export default function Solitaire() {
       width: "100vw", minHeight: "100vh",
       background: "linear-gradient(160deg, #1a6b42 0%, #145235 40%, #0e3d28 100%)",
       display: "flex", flexDirection: "column", alignItems: "center",
-      fontFamily: "'Georgia', serif",
+      fontFamily: "Arial, sans-serif",
       paddingBottom: 24,
       overflow: "hidden",
     }}>
@@ -400,9 +597,14 @@ export default function Solitaire() {
         borderBottom: "1px solid rgba(255,255,255,0.1)",
       }}>
         <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, letterSpacing: 2, textTransform: "uppercase" }}>Solitaire</span>
-        <button onClick={newGame} style={btnStyle}>
-          Nouvelle
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={handleUndo} disabled={history.length === 0} style={{ ...btnStyle, opacity: history.length === 0 ? 0.35 : 1 }}>
+            ↩ Annuler
+          </button>
+          <button onClick={newGame} style={btnStyle}>
+            Nouvelle
+          </button>
+        </div>
       </div>
 
       {won && (
@@ -420,7 +622,7 @@ export default function Solitaire() {
       )}
 
       <div style={{ width: "100%", maxWidth: 390, padding: "10px 10px 0", flex: 1 }}>
-        {/* Top row: stock, waste, foundations */}
+        {/* Top row: stock, waste fan, gap, foundations */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "flex-start" }}>
           {/* Stock */}
           <div onClick={handleStock} style={{ cursor: "pointer", flexShrink: 0 }}>
@@ -428,21 +630,21 @@ export default function Solitaire() {
               ? <Card card={{ suit: "♠", rank: "A", faceUp: false }} />
               : <EmptySlot label="↺" onClick={handleStock} />}
           </div>
-          {/* Waste */}
-          <div style={{ flexShrink: 0 }}>
-            {state.waste.length > 0
-              ? <Card
-                  card={state.waste[state.waste.length - 1]}
-                  onClick={() => handleCardClick(state.waste[state.waste.length - 1].id, "waste", -1)}
-                />
-              : <EmptySlot label="" />}
-          </div>
+          {/* Waste fan */}
+          <WasteFan
+            waste={state.waste}
+            onTopClick={(id) => handleCardClick(id, "waste", -1)}
+            setCardRef={setCardRef}
+            flyingCardIds={state.flyingCardIds}
+          />
           <div style={{ flex: 1, minWidth: 24 }} />
           {/* Foundations */}
           {state.foundations.map((f, i) => (
             <div key={i} style={{ flexShrink: 0 }}>
               {f.length > 0
-                ? <Card card={f[f.length - 1]} />
+                ? <div ref={el => setCardRef(f[f.length-1].id, el)} style={{ opacity: state.flyingCardIds && state.flyingCardIds.includes(f[f.length-1].id) ? 0 : 1 }}>
+                    <Card card={f[f.length - 1]} />
+                  </div>
                 : <EmptySlot label={suitSymbols[i]} />}
             </div>
           ))}
@@ -451,7 +653,7 @@ export default function Solitaire() {
         {/* Tableau */}
         <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
           {state.tableau.map((col, ci) => (
-            <div key={ci} style={{ flex: 1, position: "relative", minHeight: 68 }}>
+            <div key={ci} style={{ flex: 1, position: "relative", minHeight: 80 }}>
               {col.length === 0
                 ? <EmptySlot label="" />
                 : col.map((card, ri) => (
@@ -459,26 +661,27 @@ export default function Solitaire() {
                       key={card.id}
                       style={{
                         position: ri === 0 ? "relative" : "absolute",
-                        top: ri === 0 ? 0 : ri * (card.faceUp ? 22 : 14),
+                        top: ri === 0 ? 0 : ri * (card.faceUp ? 24 : 15),
                         zIndex: ri,
                         left: 0,
                       }}
                     >
-                      <Card
-                        card={card}
-                        small
-                        onClick={card.faceUp ? () => handleCardClick(card.id, "tableau", ci) : undefined}
-                      />
+                      <div ref={el => setCardRef(card.id, el)} style={{ opacity: state.flyingCardIds && state.flyingCardIds.includes(card.id) ? 0 : 1 }}>
+                        <Card
+                          card={card}
+                          small
+                          onClick={card.faceUp ? () => handleCardClick(card.id, "tableau", ci) : undefined}
+                        />
+                      </div>
                     </div>
                   ))
               }
-              {/* Invisible spacer to push container height */}
               {col.length > 0 && (
                 <div style={{
                   height: (() => {
                     let h = 0;
-                    col.forEach((c, i) => { h += i === 0 ? 0 : (c.faceUp ? 22 : 14); });
-                    return h + 54;
+                    col.forEach((c, i) => { h += i === 0 ? 0 : (c.faceUp ? 24 : 15); });
+                    return h + 62;
                   })(),
                   visibility: "hidden",
                 }} />
@@ -487,6 +690,30 @@ export default function Solitaire() {
           ))}
         </div>
       </div>
+
+      {/* Flying card animation overlays */}
+      {flyAnims.map((anim, i) => (
+        <FlyingCard
+          key={anim.card.id}
+          card={anim.card}
+          fromRect={anim.fromRect}
+          toRect={anim.toRect}
+          delay={anim.delay}
+          onDone={() => {
+            if (anim.pendingWon) setWon(true);
+            setFlyAnims(prev => {
+              const next = prev.filter(a => a.card.id !== anim.card.id);
+              if (next.length === 0) {
+                setState(s => {
+                  const { flyingCardIds, ...rest } = s;
+                  return rest;
+                });
+              }
+              return next;
+            });
+          }}
+        />
+      ))}
 
       {/* Fixed bottom bar */}
       <div style={{
@@ -528,5 +755,5 @@ const btnStyle = {
   fontSize: 12,
   cursor: "pointer",
   letterSpacing: 0.5,
-  fontFamily: "'Georgia', serif",
+  fontFamily: "Arial, sans-serif",
 };
