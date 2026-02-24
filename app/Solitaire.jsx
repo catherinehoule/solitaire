@@ -141,12 +141,46 @@ function autoMoveCard(state, cardId, fromZone, fromIndex) {
 }
 
 function findHint(state) {
-  const { tableau, waste, foundations } = state;
+  const { tableau, waste, foundations, stock } = state;
+
+  // Helper: is this move actually useful?
+  // Moving a King to an empty column is only useful if it has hidden cards beneath it
+  // or if it unblocks something (has face-down cards below it in source col)
+  const isUsefulTableauMove = (stack, fromCol, toCol) => {
+    // Moving to empty column: only useful if the king has face-down cards beneath it
+    if (tableau[toCol].length === 0) {
+      if (stack[0].rank !== "K") return false; // shouldn't happen but guard
+      const col = tableau[fromCol];
+      const cardIdx = col.findIndex(c => c.id === stack[0].id);
+      const hasHiddenBelow = cardIdx > 0 && !col[cardIdx - 1].faceUp;
+      return hasHiddenBelow;
+    }
+    return true;
+  };
+
+  // Priority 1: play to foundation
   if (waste.length > 0) {
     const card = waste[waste.length - 1];
-    if (foundationIndexForCard(card, foundations) !== -1) return `Jouer ${card.rank}${card.suit} sur la fondation`;
+    if (foundationIndexForCard(card, foundations) !== -1)
+      return `Jouer ${card.rank}${card.suit} sur la fondation`;
+  }
+  for (let col = 0; col < 7; col++) {
+    const column = tableau[col];
+    if (column.length === 0) continue;
+    const card = column[column.length - 1];
+    if (!card.faceUp) continue;
+    if (foundationIndexForCard(card, foundations) !== -1)
+      return `Jouer ${card.rank}${card.suit} sur la fondation`;
+  }
+
+  // Priority 2: useful tableau moves (not pointless King shuffles)
+  if (waste.length > 0) {
+    const card = waste[waste.length - 1];
     for (let t = 0; t < 7; t++) {
-      if (canPlaceOnTableau(card, tableau[t])) return `Jouer ${card.rank}${card.suit} sur la colonne ${t + 1}`;
+      if (canPlaceOnTableau(card, tableau[t])) {
+        if (tableau[t].length === 0 && card.rank === "K") continue; // skip useless king move
+        return `Jouer ${card.rank}${card.suit} sur la colonne ${t + 1}`;
+      }
     }
   }
   for (let col = 0; col < 7; col++) {
@@ -155,22 +189,29 @@ function findHint(state) {
       const card = column[row];
       if (!card.faceUp) continue;
       const stack = column.slice(row);
-      if (stack.length === 1) {
-        if (foundationIndexForCard(card, foundations) !== -1) return `Jouer ${card.rank}${card.suit} sur la fondation`;
-      }
       for (let t = 0; t < 7; t++) {
         if (t === col) continue;
         if (canPlaceOnTableau(stack[0], tableau[t])) {
+          if (!isUsefulTableauMove(stack, col, t)) continue;
           return `Déplacer ${stack[0].rank}${stack[0].suit} vers la colonne ${t + 1}`;
         }
       }
     }
   }
-  return null;
+
+  // No useful move found
+  if (stock.length > 0) return "DRAW"; // signal to draw from stock
+  if (waste.length > 0) return "REDRAW"; // signal to flip waste back
+  return "NONE"; // truly stuck
 }
 
-function isWon(foundations) {
-  return foundations.every(f => f.length === 13);
+function isWon(foundations, tableau, stock, waste) {
+  if (foundations.every(f => f.length === 13)) return true;
+  // Also win when all cards are face-up (player can finish on their own)
+  if (stock.length > 0) return false;
+  if (waste.some(c => !c.faceUp)) return false;
+  if (tableau.some(col => col.some(c => !c.faceUp))) return false;
+  return true;
 }
 
 // --- Quebec City card back SVG ---
@@ -521,7 +562,7 @@ export default function Solitaire() {
         return prev;
       }
 
-      const pendingWon = isWon(result.foundations);
+      const pendingWon = isWon(result.foundations, result.tableau, result.stock, result.waste);
 
       if (!fromRects[0]) {
         pushHistory(prev);
@@ -565,16 +606,18 @@ export default function Solitaire() {
 
   const handleHint = () => {
     const h = findHint(state);
-    if (h) {
+    if (h === "DRAW") {
+      setHint(null);
+      showMessage("Retournez le talon pour continuer", 2500);
+    } else if (h === "REDRAW") {
+      setHint(null);
+      showMessage("Retournez la défausse pour continuer", 2500);
+    } else if (h === "NONE") {
+      setHint(null);
+      showMessage("Aucun coup possible — recommencez !", 3500);
+    } else {
       setHint(h);
       setTimeout(() => setHint(null), 3000);
-    } else {
-      setHint(null);
-      if (state.stock.length === 0 && state.waste.length === 0) {
-        showMessage("Aucun mouvement possible — nouvelle partie ?", 3500);
-      } else {
-        showMessage("Essayez de retourner le talon !", 2500);
-      }
     }
   };
 
@@ -625,9 +668,25 @@ export default function Solitaire() {
         {/* Top row: stock, waste fan, gap, foundations */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "flex-start" }}>
           {/* Stock */}
-          <div onClick={handleStock} style={{ cursor: "pointer", flexShrink: 0 }}>
+          <div onClick={handleStock} style={{ cursor: "pointer", flexShrink: 0, position: "relative" }}>
             {state.stock.length > 0
-              ? <Card card={{ suit: "♠", rank: "A", faceUp: false }} />
+              ? <>
+                  <Card card={{ suit: "♠", rank: "A", faceUp: false }} />
+                  <div style={{
+                    position: "absolute", bottom: 3, right: 3,
+                    background: "rgba(0,0,0,0.65)",
+                    color: "#fff",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    borderRadius: 8,
+                    padding: "1px 5px",
+                    lineHeight: 1.4,
+                    fontFamily: "Arial, sans-serif",
+                    pointerEvents: "none",
+                  }}>
+                    {state.stock.length}
+                  </div>
+                </>
               : <EmptySlot label="↺" onClick={handleStock} />}
           </div>
           {/* Waste fan */}
