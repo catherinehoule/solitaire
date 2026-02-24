@@ -286,11 +286,11 @@ function FlyingCard({ card, fromRect, toRect, onDone, delay = 0 }) {
     >
       {/* Top-left: rank */}
       <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontWeight: 800, fontSize: w < 50 ? 17 : 21, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
-        <span style={{ fontSize: w < 50 ? 13 : 16, color, lineHeight: 1.2 }}>{card.suit}</span>
+        <span style={{ fontWeight: 800, fontSize: 17, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
+        <span style={{ fontSize: 13, color, lineHeight: 1.2 }}>{card.suit}</span>
       </div>
       {/* Center suit - lower */}
-      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: w < 50 ? 44 : 60, color, lineHeight: 1, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 44, color, lineHeight: 1, pointerEvents: "none" }}>
         {card.suit}
       </div>
       <div />
@@ -301,11 +301,11 @@ function FlyingCard({ card, fromRect, toRect, onDone, delay = 0 }) {
 // --- Card Component ---
 function Card({ card, onClick, small, cardRef }) {
   const isRed = SUIT_COLORS[card.suit] === "red";
-  const w = small ? 44 : 56;
-  const h = small ? 62 : 80;
+  const w = 44;
+  const h = 62;
   const color = isRed ? "#c0392b" : "#1a1a2e";
-  const cornerFontSize = small ? 17 : 21;
-  const centerFontSize = small ? 44 : 60;
+  const cornerFontSize = 17;
+  const centerFontSize = 44;
 
   if (!card.faceUp) {
     return (
@@ -366,7 +366,7 @@ function EmptySlot({ label, onClick }) {
     <div
       onClick={onClick}
       style={{
-        width: 56, height: 80,
+        width: 44, height: 62,
         borderRadius: 5,
         border: "1.5px dashed rgba(255,255,255,0.25)",
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -383,7 +383,7 @@ function EmptySlot({ label, onClick }) {
 
 // --- Waste Fan: show top 3 cards fanned ---
 function WasteFan({ waste, onTopClick, setCardRef, flyingCardIds }) {
-  const w = 56, h = 80;
+  const w = 44, h = 62;
   const visCount = Math.min(3, waste.length);
   if (visCount === 0) return <EmptySlot label="" />;
 
@@ -415,7 +415,7 @@ function WasteFan({ waste, onTopClick, setCardRef, flyingCardIds }) {
             >
               <Card
                 card={card}
-                small={false}
+                small
                 onClick={isTop ? () => onTopClick(card.id) : undefined}
               />
             </div>
