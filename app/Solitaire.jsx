@@ -327,11 +327,11 @@ function FlyingCard({ card, fromRect, toRect, onDone, delay = 0 }) {
     >
       {/* Top-left: rank */}
       <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontWeight: 800, fontSize: 17, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
+        <span style={{ fontWeight: 800, fontSize: 13, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
         <span style={{ fontSize: 13, color, lineHeight: 1.2 }}>{card.suit}</span>
       </div>
       {/* Center suit - lower */}
-      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 44, color, lineHeight: 1, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 30, color, lineHeight: 1, pointerEvents: "none" }}>
         {card.suit}
       </div>
       <div />
@@ -345,8 +345,8 @@ function Card({ card, onClick, small, cardRef }) {
   const w = 44;
   const h = 62;
   const color = isRed ? "#c0392b" : "#1a1a2e";
-  const cornerFontSize = 17;
-  const centerFontSize = 44;
+  const cornerFontSize = 13;
+  const centerFontSize = 30;
 
   if (!card.faceUp) {
     return (
@@ -373,6 +373,9 @@ function Card({ card, onClick, small, cardRef }) {
       onClick={onClick}
       style={{
         width: w, height: h,
+        minWidth: w, maxWidth: w,
+        minHeight: h, maxHeight: h,
+        boxSizing: "border-box",
         borderRadius: 5,
         background: "#faf7f2",
         border: "1.5px solid #d4c9b8",
