@@ -319,19 +319,19 @@ function FlyingCard({ card, fromRect, toRect, onDone, delay = 0 }) {
         border: "1.5px solid #d4c9b8",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "3px 4px",
+        justifyContent: "flex-start",
+        padding: "0px 3px",
         boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         overflow: "hidden",
       }}
     >
       {/* Top-left: rank */}
       <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontWeight: 800, fontSize: 13, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
-        <span style={{ fontSize: 13, color, lineHeight: 1.2 }}>{card.suit}</span>
+        <span style={{ fontWeight: 800, fontSize: 16, color, fontFamily: "Arial, sans-serif", lineHeight: 1, marginTop: 2 }}>{card.rank}</span>
+        <span style={{ fontSize: 24, color, lineHeight: 1, marginTop: -2 }}>{card.suit}</span>
       </div>
       {/* Center suit - lower */}
-      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 30, color, lineHeight: 1, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 45, color, lineHeight: 1, pointerEvents: "none" }}>
         {card.suit}
       </div>
       <div />
@@ -345,8 +345,8 @@ function Card({ card, onClick, small, cardRef }) {
   const w = 44;
   const h = 62;
   const color = isRed ? "#c0392b" : "#1a1a2e";
-  const cornerFontSize = 13;
-  const centerFontSize = 30;
+  const cornerFontSize = 16;
+  const centerFontSize = 45;
 
   if (!card.faceUp) {
     return (
@@ -383,8 +383,8 @@ function Card({ card, onClick, small, cardRef }) {
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "3px 4px",
+        justifyContent: "flex-start",
+        padding: "0px 3px",
         boxShadow: onClick ? "0 2px 6px rgba(0,0,0,0.25)" : "0 1px 3px rgba(0,0,0,0.2)",
         userSelect: "none",
         position: "relative",
@@ -393,8 +393,8 @@ function Card({ card, onClick, small, cardRef }) {
     >
       {/* Top row: rank left, suit right */}
       <div style={{ display: "flex", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontWeight: 800, fontSize: cornerFontSize, color, fontFamily: "Arial, sans-serif", lineHeight: 1 }}>{card.rank}</span>
-        <span style={{ fontSize: cornerFontSize - 4, color, lineHeight: 1.2 }}>{card.suit}</span>
+        <span style={{ fontWeight: 800, fontSize: cornerFontSize, color, fontFamily: "Arial, sans-serif", lineHeight: 1, marginTop: 2 }}>{card.rank}</span>
+        <span style={{ fontSize: Math.round(cornerFontSize * 1.5), color, lineHeight: 1, marginTop: -2 }}>{card.suit}</span>
       </div>
       {/* Center suit - shifted lower */}
       <div style={{ position: "absolute", top: "58%", left: "50%", transform: "translate(-50%, -50%)", fontSize: centerFontSize, color, lineHeight: 1, pointerEvents: "none" }}>
@@ -426,9 +426,9 @@ function EmptySlot({ label, onClick }) {
 }
 
 // --- Waste Fan: show top 3 cards fanned ---
-function WasteFan({ waste, onTopClick, setCardRef, flyingCardIds }) {
+function WasteFan({ waste, onTopClick, setCardRef, flyingCardIds, stockEmpty }) {
   const w = 44, h = 62;
-  const visCount = Math.min(3, waste.length);
+  const visCount = stockEmpty ? Math.min(1, waste.length) : Math.min(3, waste.length);
   if (visCount === 0) return <EmptySlot label="" />;
 
   // Cards shown: index [waste.length - visCount .. waste.length-1]
@@ -698,6 +698,7 @@ export default function Solitaire() {
             onTopClick={(id) => handleCardClick(id, "waste", -1)}
             setCardRef={setCardRef}
             flyingCardIds={state.flyingCardIds}
+            stockEmpty={state.stock.length === 0}
           />
           <div style={{ flex: 1, minWidth: 24 }} />
           {/* Foundations */}
@@ -723,7 +724,7 @@ export default function Solitaire() {
                       key={card.id}
                       style={{
                         position: ri === 0 ? "relative" : "absolute",
-                        top: ri === 0 ? 0 : ri * (card.faceUp ? 24 : 15),
+                        top: ri === 0 ? 0 : ri * 15,
                         zIndex: ri,
                         left: 0,
                       }}
@@ -742,7 +743,7 @@ export default function Solitaire() {
                 <div style={{
                   height: (() => {
                     let h = 0;
-                    col.forEach((c, i) => { h += i === 0 ? 0 : (c.faceUp ? 24 : 15); });
+                    col.forEach((c, i) => { h += i === 0 ? 0 : 15; });
                     return h + 62;
                   })(),
                   visibility: "hidden",
