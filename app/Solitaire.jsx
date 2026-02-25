@@ -68,6 +68,21 @@ function autoMoveCard(state, cardId, fromZone, fromIndex) {
   if (fromZone === "waste") {
     card = waste[waste.length - 1];
     if (!card || card.id !== cardId) return null;
+  } else if (fromZone === "foundation") {
+    const f = foundations[fromIndex];
+    card = f[f.length - 1];
+    if (!card || card.id !== cardId) return null;
+    // Foundation cards can only go to tableau
+    for (let t = 0; t < 7; t++) {
+      if (canPlaceOnTableau(card, tableau[t])) {
+        const newTableau = tableau.map(c => [...c]);
+        newTableau[t] = [...newTableau[t], { ...card, faceUp: true }];
+        const newFoundations = foundations.map(f => [...f]);
+        newFoundations[fromIndex] = f.slice(0, -1);
+        return { ...state, tableau: newTableau, foundations: newFoundations };
+      }
+    }
+    return null;
   } else if (fromZone === "tableau") {
     const col = tableau[fromIndex];
     const cardIdx = col.findIndex(c => c.id === cardId);
@@ -706,7 +721,7 @@ export default function Solitaire() {
             <div key={i} style={{ flexShrink: 0 }}>
               {f.length > 0
                 ? <div ref={el => setCardRef(f[f.length-1].id, el)} style={{ opacity: state.flyingCardIds && state.flyingCardIds.includes(f[f.length-1].id) ? 0 : 1 }}>
-                    <Card card={f[f.length - 1]} />
+                    <Card card={f[f.length - 1]} onClick={() => handleCardClick(f[f.length-1].id, "foundation", i)} />
                   </div>
                 : <EmptySlot label={suitSymbols[i]} />}
             </div>
@@ -719,31 +734,38 @@ export default function Solitaire() {
             <div key={ci} style={{ flex: 1, position: "relative", minHeight: 80 }}>
               {col.length === 0
                 ? <EmptySlot label="" />
-                : col.map((card, ri) => (
-                    <div
-                      key={card.id}
-                      style={{
-                        position: ri === 0 ? "relative" : "absolute",
-                        top: ri === 0 ? 0 : ri * 15,
-                        zIndex: ri,
-                        left: 0,
-                      }}
-                    >
-                      <div ref={el => setCardRef(card.id, el)} style={{ opacity: state.flyingCardIds && state.flyingCardIds.includes(card.id) ? 0 : 1 }}>
-                        <Card
-                          card={card}
-                          small
-                          onClick={card.faceUp ? () => handleCardClick(card.id, "tableau", ci) : undefined}
-                        />
+                : col.map((card, ri) => {
+                    const isLast = ri === col.length - 1;
+                    return (
+                      <div
+                        key={card.id}
+                        style={{
+                          position: ri === 0 ? "relative" : "absolute",
+                          top: ri === 0 ? 0 : ri * 23,
+                          zIndex: ri,
+                          left: 0,
+                          // Clip click area to exposed strip (23px) for non-last cards
+                          height: isLast ? 62 : 23,
+                          overflow: isLast ? "visible" : "hidden",
+                          width: 44,
+                        }}
+                      >
+                        <div ref={el => setCardRef(card.id, el)} style={{ opacity: state.flyingCardIds && state.flyingCardIds.includes(card.id) ? 0 : 1 }}>
+                          <Card
+                            card={card}
+                            small
+                            onClick={card.faceUp ? () => handleCardClick(card.id, "tableau", ci) : undefined}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
               }
               {col.length > 0 && (
                 <div style={{
                   height: (() => {
                     let h = 0;
-                    col.forEach((c, i) => { h += i === 0 ? 0 : 15; });
+                    col.forEach((c, i) => { h += i === 0 ? 0 : 23; });
                     return h + 62;
                   })(),
                   visibility: "hidden",
